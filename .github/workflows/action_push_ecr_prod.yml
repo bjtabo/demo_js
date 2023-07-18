@@ -1,0 +1,95 @@
+name: Deploy to ECR
+
+on:
+  push:
+    tags :
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-hotfix"
+      - "v[0-9]+.[0-9]+.[0-9]+-hotfix[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-HOTFIX"
+      - "v[0-9]+.[0-9]+.[0-9]+-HOTFIX[0-9]+"
+
+
+permissions:
+      id-token: write   # This is required for requesting the JWT
+      contents: read    # This is required for actions/checkout
+
+env:
+  AWS_REGION : "us-east-2" ## AWS Region
+  ECR_REPOSITORY : "demo-prod" ## Repository Name ECR
+  ROLE_TO_ASSUME : "arn:aws:iam::863393115526:role/RoleForGithubPushECRAllServiceProduction" ## Role to Assume WITH Policy
+  SECRET_NAME : "arn:aws:secretsmanager:us-east-2:863393115526:secret:prod/demo-lmhe23" ## Secret Name ID
+  SECRET_NAME_GIT : "arn:aws:secretsmanager:us-east-2:611567607053:secret:stg/devops-6k1khR"
+  COMMAND_BUILD : cp Dockerfile Dockerfile.cp && cat Dockerfile && docker build --build-arg=GITHUB_TOKEN=$GITHUB_TOKEN -t $ECR_REPOSITORY:latest .
+  COMMAND_TAG : docker tag $ECR_REPOSITORY:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest && docker tag $ECR_REPOSITORY:latest $ECR_REGISTRY/$ECR_REPOSITORY:$TAG
+  COMMAND_PUSH : docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest && docker push $ECR_REGISTRY/$ECR_REPOSITORY:$TAG
+
+jobs:
+  build:
+    name: Build Image
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [15.x]
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set output
+      id: vars
+      run: echo "TAG=`echo $(git describe --tags --abbrev=0)`" >> $GITHUB_ENV
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+        aws-region: ${{ env.AWS_REGION }}
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+    - name: Get Secrets by Name and by ARN
+      uses: aws-actions/aws-secretsmanager-get-secrets@v1
+      with:
+        secret-ids: ${{ env.SECRET_NAME }}
+        parse-json-secrets: true
+    - name: Build
+      env:
+        GITHUB_TOKEN: ${{ secrets.ACTION_TOKEN }}
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+        RELEASE_VERSION: ${{ steps.vars.outputs.tag }}
+      run: ${{ env.COMMAND_BUILD }}
+    - name: Tag
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+        RELEASE_VERSION: ${{ steps.vars.outputs.tag }}
+      run: ${{ env.COMMAND_TAG }}
+    - name: Push
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+        RELEASE_VERSION: ${{ steps.vars.outputs.tag }}
+      run: ${{ env.COMMAND_PUSH }}
+    - name: Install
+      run: npm install -g npm@7
+    - name: node version
+      uses: actions/setup-node@v2
+      with: 
+          node-version: 15
+    - name: Install dependencies
+      run: |
+          cd codebase/rdicidr-0.1.0
+          npm install
+    - name: Linter
+      run: |
+        cd codebase/rdicidr-0.1.0
+        npm run lint
+    - name: Formatter
+      run: |
+        cd codebase/rdicidr-0.1.0
+        npm install prettier --save-dev
+        npm run prettier
+    - name: Test
+      run: |
+        cd codebase/rdicidr-0.1.0
+        CI=true npm run test
