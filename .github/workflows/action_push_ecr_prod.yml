@@ -16,9 +16,9 @@ permissions:
 
 env:
   AWS_REGION : "us-east-2" ## AWS Region
-  ECR_REPOSITORY : "demo-prod" ## Repository Name ECR
+  ECR_REPOSITORY : "demo1-prod" ## Repository Name ECR
   ROLE_TO_ASSUME : "arn:aws:iam::863393115526:role/RoleForGithubPushECRAllServiceProduction" ## Role to Assume WITH Policy
-  SECRET_NAME : "arn:aws:secretsmanager:us-east-2:863393115526:secret:prod/demo-lmhe23" ## Secret Name ID
+  SECRET_NAME : "arn:aws:secretsmanager:us-east-2:863393115526:secret:prod/demo1-EyiSGP" ## Secret Name ID
   SECRET_NAME_GIT : "arn:aws:secretsmanager:us-east-2:611567607053:secret:stg/devops-6k1khR"
   COMMAND_BUILD : cp Dockerfile Dockerfile.cp && cat Dockerfile && docker build --build-arg=GITHUB_TOKEN=$GITHUB_TOKEN -t $ECR_REPOSITORY:latest .
   COMMAND_TAG : docker tag $ECR_REPOSITORY:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest && docker tag $ECR_REPOSITORY:latest $ECR_REGISTRY/$ECR_REPOSITORY:$TAG
